@@ -26,7 +26,7 @@ erpnext.TransactionController = erpnext.stock.StockController.extend({
 					me.frm.set_value(fieldname, value);
 			});
 
-			if(this.frm.doc.company) {
+			if(this.frm.doc.company && !this.frm.doc.amended_from) {
 				cur_frm.script_manager.trigger("company");
 			}
 		}
@@ -363,14 +363,16 @@ erpnext.TransactionController = erpnext.stock.StockController.extend({
 	_get_item_list: function(item) {
 		var item_list = [];
 		var append_item = function(d) {
-			item_list.push({
-				"doctype": d.doctype,
-				"name": d.name,
-				"item_code": d.item_code,
-				"item_group": d.item_group,
-				"brand": d.brand,
-				"qty": d.qty
-			});
+			if (d.item_code) {
+				item_list.push({
+					"doctype": d.doctype,
+					"name": d.name,
+					"item_code": d.item_code,
+					"item_group": d.item_group,
+					"brand": d.brand,
+					"qty": d.qty
+				});
+			}
 		};
 
 		if (item) {
