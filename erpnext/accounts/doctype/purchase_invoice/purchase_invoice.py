@@ -14,6 +14,10 @@ import frappe.defaults
 from erpnext.controllers.buying_controller import BuyingController
 from erpnext.accounts.party import get_party_account, get_due_date
 
+form_grid_templates = {
+	"entries": "templates/form_grid/item_grid.html"
+}
+
 class PurchaseInvoice(BuyingController):
 	tname = 'Purchase Invoice Item'
 	fname = 'entries'
@@ -270,6 +274,9 @@ class PurchaseInvoice(BuyingController):
 		auto_accounting_for_stock = \
 			cint(frappe.defaults.get_global_default("auto_accounting_for_stock"))
 
+		stock_received_but_not_billed = self.get_company_default("stock_received_but_not_billed")
+		expenses_included_in_valuation = self.get_company_default("expenses_included_in_valuation")
+
 		gl_entries = []
 
 		# parent's gl entry
@@ -309,30 +316,10 @@ class PurchaseInvoice(BuyingController):
 					(tax.add_deduct_tax == "Add" and 1 or -1) * flt(tax.tax_amount)
 
 		# item gl entries
-		stock_item_and_auto_accounting_for_stock = False
+		negative_expense_to_be_booked = 0.0
 		stock_items = self.get_stock_items()
 		for item in self.get("entries"):
-			if auto_accounting_for_stock and item.item_code in stock_items:
-				if flt(item.valuation_rate):
-					# if auto inventory accounting enabled and stock item,
-					# then do stock related gl entries
-					# expense will be booked in sales invoice
-					stock_item_and_auto_accounting_for_stock = True
-
-					valuation_amt = flt(item.base_amount + item.item_tax_amount,
-						self.precision("base_amount", item))
-
-					gl_entries.append(
-						self.get_gl_dict({
-							"account": item.expense_account,
-							"against": self.credit_to,
-							"debit": valuation_amt,
-							"remarks": self.remarks or "Accounting Entry for Stock"
-						})
-					)
-
-			elif flt(item.base_amount):
-				# if not a stock item or auto inventory accounting disabled, book the expense
+			if flt(item.base_amount):
 				gl_entries.append(
 					self.get_gl_dict({
 						"account": item.expense_account,
@@ -343,22 +330,51 @@ class PurchaseInvoice(BuyingController):
 					})
 				)
 
-		if stock_item_and_auto_accounting_for_stock and valuation_tax:
+			if auto_accounting_for_stock and item.item_code in stock_items and item.item_tax_amount:
+					# Post reverse entry for Stock-Received-But-Not-Billed if it is booked in Purchase Receipt
+					negative_expense_booked_in_pi = None
+					if item.purchase_receipt:
+						negative_expense_booked_in_pi = frappe.db.sql("""select name from `tabGL Entry`
+							where voucher_type='Purchase Receipt' and voucher_no=%s and account=%s""",
+							(item.purchase_receipt, expenses_included_in_valuation))
+
+					if not negative_expense_booked_in_pi:
+						gl_entries.append(
+							self.get_gl_dict({
+								"account": stock_received_but_not_billed,
+								"against": self.credit_to,
+								"debit": flt(item.item_tax_amount, self.precision("item_tax_amount", item)),
+								"remarks": self.remarks or "Accounting Entry for Stock"
+							})
+						)
+
+						negative_expense_to_be_booked += flt(item.item_tax_amount, self.precision("item_tax_amount", item))
+
+		if negative_expense_to_be_booked and valuation_tax:
 			# credit valuation tax amount in "Expenses Included In Valuation"
 			# this will balance out valuation amount included in cost of goods sold
-			expenses_included_in_valuation = \
-				self.get_company_default("expenses_included_in_valuation")
 
+			total_valuation_amount = sum(valuation_tax.values())
+			amount_including_divisional_loss = negative_expense_to_be_booked
+			i = 1
 			for cost_center, amount in valuation_tax.items():
+				if i == len(valuation_tax):
+					applicable_amount = amount_including_divisional_loss
+				else:
+					applicable_amount = negative_expense_to_be_booked * (amount / total_valuation_amount)
+					amount_including_divisional_loss -= applicable_amount
+
 				gl_entries.append(
 					self.get_gl_dict({
 						"account": expenses_included_in_valuation,
 						"cost_center": cost_center,
 						"against": self.credit_to,
-						"credit": amount,
+						"credit": applicable_amount,
 						"remarks": self.remarks or "Accounting Entry for Stock"
 					})
 				)
+
+				i += 1
 
 		# writeoff account includes petty difference in the invoice amount
 		# and the amount that is paid
@@ -383,7 +399,7 @@ class PurchaseInvoice(BuyingController):
 
 		self.update_prevdoc_status()
 		self.update_billing_status_for_zero_amount_refdoc("Purchase Order")
-		self.make_cancel_gl_entries()
+		self.make_gl_entries_on_cancel()
 
 	def on_update(self):
 		pass

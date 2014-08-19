@@ -71,10 +71,12 @@ erpnext.stock.StockEntry = erpnext.stock.StockController.extend({
 		if(this.frm.doc.docstatus === 1 &&
 				frappe.boot.user.can_create.indexOf("Journal Voucher")!==-1) {
 			if(this.frm.doc.purpose === "Sales Return") {
-				this.frm.add_custom_button(__("Make Credit Note"), function() { me.make_return_jv(); });
+				this.frm.add_custom_button(__("Make Credit Note"),
+					function() { me.make_return_jv(); }, frappe.boot.doctype_icons["Journal Voucher"]);
 				this.add_excise_button();
 			} else if(this.frm.doc.purpose === "Purchase Return") {
-				this.frm.add_custom_button(__("Make Debit Note"), function() { me.make_return_jv(); });
+				this.frm.add_custom_button(__("Make Debit Note"),
+					function() { me.make_return_jv(); }, frappe.boot.doctype_icons["Journal Voucher"]);
 				this.add_excise_button();
 			}
 		}
@@ -199,7 +201,7 @@ erpnext.stock.StockEntry = erpnext.stock.StockController.extend({
 				excise = locals['Journal Voucher'][excise];
 				excise.voucher_type = 'Excise Voucher';
 				loaddoc('Journal Voucher', excise.name);
-			});
+			}, frappe.boot.doctype_icons["Journal Voucher"], "btn-default");
 	},
 
 	make_return_jv: function() {
@@ -211,10 +213,9 @@ erpnext.stock.StockEntry = erpnext.stock.StockController.extend({
 				},
 				callback: function(r) {
 					if(!r.exc) {
-						var jv_name = frappe.model.make_new_doc_and_get_name('Journal Voucher');
-						var jv = locals["Journal Voucher"][jv_name];
-						$.extend(jv, r.message);
-						loaddoc("Journal Voucher", jv_name);
+						var doclist = frappe.model.sync(r.message);
+						frappe.set_route("Form", doclist[0].doctype, doclist[0].name);
+
 					}
 				}
 			});
@@ -266,20 +267,20 @@ erpnext.stock.StockEntry = erpnext.stock.StockController.extend({
 
 	customer: function() {
 		this.get_party_details({
-			party: this.frm.doc.customer, 
-			party_type:"Customer", 
+			party: this.frm.doc.customer,
+			party_type:"Customer",
 			doctype: this.frm.doc.doctype
 		});
 	},
 
 	supplier: function() {
 		this.get_party_details({
-			party: this.frm.doc.supplier, 
-			party_type:"Supplier", 
+			party: this.frm.doc.supplier,
+			party_type:"Supplier",
 			doctype: this.frm.doc.doctype
 		});
 	},
-	
+
 	get_party_details: function(args) {
 		var me = this;
 		frappe.call({
