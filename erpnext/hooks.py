@@ -1,11 +1,10 @@
-from erpnext.__version__ import __version__
 app_name = "erpnext"
 app_title = "ERPNext"
 app_publisher = "Web Notes Technologies Pvt. Ltd. and Contributors"
 app_description = "Open Source Enterprise Resource Planning for Small and Midsized Organizations"
 app_icon = "icon-th"
 app_color = "#e74c3c"
-app_version = __version__
+app_version = "4.3.0"
 
 error_report_email = "support@erpnext.com"
 
@@ -64,7 +63,7 @@ scheduler_events = {
 		"erpnext.selling.doctype.lead.get_leads.get_leads"
 	],
 	"daily": [
-		"erpnext.controllers.recurring_document.create_recurring_documents"
+		"erpnext.controllers.recurring_document.create_recurring_documents",
 		"erpnext.stock.utils.reorder_item",
 		"erpnext.setup.doctype.email_digest.email_digest.send",
 		"erpnext.support.doctype.support_ticket.support_ticket.auto_close_tickets"
