@@ -52,11 +52,15 @@ class DeliveryNote(SellingController):
 			else:
 				df.delete_key("__print_hide")
 
-		toggle_print_hide(self.meta, "currency")
-
 		item_meta = frappe.get_meta("Delivery Note Item")
-		for fieldname in ("rate", "amount", "price_list_rate", "discount_percentage"):
-			toggle_print_hide(item_meta, fieldname)
+		print_hide_fields = {
+			"parent": ["grand_total_export", "rounded_total_export", "in_words_export", "currency", "net_total_export"],
+			"items": ["rate", "amount", "price_list_rate", "discount_percentage"]
+		}
+
+		for key, fieldname in print_hide_fields.items():
+			for f in fieldname:
+				toggle_print_hide(self.meta if key == "parent" else item_meta, f)
 
 	def get_portal_page(self):
 		return "shipment" if self.docstatus==1 else None
@@ -245,7 +249,7 @@ class DeliveryNote(SellingController):
 		sl_entries = []
 		for d in self.get_item_list():
 			if frappe.db.get_value("Item", d.item_code, "is_stock_item") == "Yes" \
-					and d.warehouse:
+					and d.warehouse and flt(d['qty']):
 				self.update_reserved_qty(d)
 
 				sl_entries.append(self.get_sl_entries(d, {
@@ -377,7 +381,8 @@ def make_packing_slip(source_name, target_doc=None):
 		"Delivery Note": {
 			"doctype": "Packing Slip",
 			"field_map": {
-				"name": "delivery_note"
+				"name": "delivery_note",
+				"letter_head": "letter_head"
 			},
 			"validation": {
 				"docstatus": ["=", 0]

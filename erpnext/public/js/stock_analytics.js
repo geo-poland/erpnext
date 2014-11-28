@@ -131,6 +131,7 @@ erpnext.StockAnalytics = erpnext.StockGridReport.extend({
 
 			if(me.is_default("warehouse") ? true : me.warehouse == sl.warehouse) {
 				var item = me.item_by_name[sl.item_code];
+				if(item.closing_qty_value==undefined) item.closing_qty_value = 0;
 
 				if(me.value_or_qty!="Quantity") {
 					var wh = me.get_item_warehouse(sl.warehouse, sl.item_code);
@@ -138,9 +139,20 @@ erpnext.StockAnalytics = erpnext.StockGridReport.extend({
 						item.valuation_method : sys_defaults.valuation_method;
 					var is_fifo = valuation_method == "FIFO";
 
-					var diff = me.get_value_diff(wh, sl, is_fifo);
+					if(sl.voucher_type=="Stock Reconciliation") {
+						var diff = (sl.qty_after_transaction * sl.valuation_rate) - item.closing_qty_value;
+						wh.fifo_stack.push([sl.qty_after_transaction, sl.valuation_rate, sl.posting_date]);
+						wh.balance_qty = sl.qty_after_transaction;
+						wh.balance_value = sl.valuation_rate * sl.qty_after_transaction;
+					} else {
+						var diff = me.get_value_diff(wh, sl, is_fifo);
+					}
 				} else {
-					var diff = sl.qty;
+					if(sl.voucher_type=="Stock Reconciliation") {
+						var diff = sl.qty_after_transaction - item.closing_qty_value;
+					} else {
+						var diff = sl.qty;
+					}
 				}
 
 				if(posting_datetime < from_date) {
@@ -150,6 +162,8 @@ erpnext.StockAnalytics = erpnext.StockGridReport.extend({
 				} else {
 					break;
 				}
+
+				item.closing_qty_value += diff;
 			}
 		}
 	},
